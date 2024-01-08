@@ -3,12 +3,17 @@ from tkinter import messagebox
 import random
 import subprocess
 import json
+import pandas
+
 # import pyperclip
 
 DEEP_BLUE = "#004080"
 ACCENT_ORANGE = "#ffa500"
 STEEL_GREY = "#9a9a9a"
 CHARCOAL = "#333333"
+
+search_result = ""
+new_password = ""
 
 
 # Back-----------------------------------------------------Back
@@ -71,6 +76,8 @@ def search_by_samaccountname(username):
 
 
 def clear_table():
+    global search_result
+    search_result = ""
     new_password_entry.delete(0, END)
     display_name_value.config(text="")
     email_value.config(text="")
@@ -110,7 +117,10 @@ def fill_the_table(search_result, password):
     employee_id_value.config(text=employeeid)
     new_password_entry.insert(0, password)
 
-def search(event):
+
+def search():
+    global search_result
+    global new_password
     # event listens when hit Enter on keyboard to run search
     user_input = username_id_entry.get()
     clear_table()
@@ -118,9 +128,8 @@ def search(event):
         if user_input.isnumeric():
             search_result = search_by_employee_id(user_input)
             if search_result:
-                password = generate_password()
-                fill_the_table(search_result, password)
-                reset_password(search_result, password)
+                new_password = generate_password()
+                fill_the_table(search_result, new_password)
                 return search_result
             else:
                 messagebox.showerror(title="404", message=f"The user with {user_input} code not found.")
@@ -128,9 +137,8 @@ def search(event):
         elif isinstance(user_input, str):
             search_result = search_by_samaccountname(user_input)
             if search_result:
-                password = generate_password()
-                fill_the_table(search_result, password)
-                reset_password(search_result, password)
+                new_password = generate_password()
+                fill_the_table(search_result, new_password)
                 return search_result
             else:
                 messagebox.showerror(title="404", message=f"The user  {user_input}  not found.")
@@ -138,8 +146,45 @@ def search(event):
         messagebox.showerror(title="OOPS!", message="This field should not be empty.")
 
 
-def reset_password(user_object, password):
-    pass
+def reset_password():
+    global search_result
+    if len(username_id_entry.get()) == 0:
+        messagebox.showerror(title="Caution", message="No empty entry accepted!")
+    elif search_result:
+        sam_account_name = search_result.get("sAMAccountName")
+        password = new_password
+        change_password_command = f'''
+        $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName
+        $new_pass = "{password}"
+        if ($user -ne $null) {{
+            Set-ADAccountPassword -Identity $user -NewPassword $new_pass -Reset
+            Write-Output "PasswordChangeSuccess"
+        }} else {{
+            Write-Output "UserNotFound"
+        }}
+        '''
+        msg_box = messagebox.askyesno(title="Warning",
+                                      message=f"Are you Sure You want to change\n{sam_account_name}'s password?",
+                                      icon="warning")
+        if msg_box:
+            result_change_password_command = run_powershell_command(change_password_command, expect_json=False)
+            # Check the result and return proper output to produce perfect message
+            if "PasswordChangeSuccess" in result_change_password_command:
+                print("Password change successful.")
+                messagebox.showinfo(title="Success",
+                                    message=f"Password of user {sam_account_name} changed successfully")
+                username_id_entry.delete(0, END)
+                del search_result
+                return True
+            elif "UserNotFound" in result_change_password_command:
+                messagebox.showerror(title="Error", message="User Not Found.")
+                print("User not found.")
+                return False
+            else:
+                print("Password change failed.")
+
+    else:
+        messagebox.showerror(title="OOPS!", message=f"You should search the user first")
 
 
 def send_to_printer(input):
@@ -166,12 +211,48 @@ def generate_password():
     # password_entry.insert(0, password)
     # pyperclip.copy(password)
 
-def email_correction(input):
-    pass
+
+def handle_textbox():
+    username_list = []
+    email_list = group_email_textbox.get(0.0, 'end').strip().splitlines()
+    for email in email_list:
+        email = email.strip().split('@')
+        username_list.append(email[0])
+
+    return username_list
 
 
-def save_to_csv(input):
-    pass
+def group_reset_email():
+    # end-1c: tkinter add a \n in the textbox by default and should be removed from the "end"
+    if len(group_email_textbox.get(0.0, 'end-1c')) == 0:
+        messagebox.showerror(title='WTH', message='Reset what?!')
+    else:
+        list_of_usernames = handle_textbox()
+        print(list_of_usernames)
+        result = {}
+        for sam_account_name in list_of_usernames:
+            password = generate_password()
+            change_password_command = f'''
+            $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName
+            $new_pass = "{password}"
+            if ($user -ne $null) {{
+                Set-ADAccountPassword -Identity $user -NewPassword $new_pass -Reset
+                Write-Output "PasswordChangeSuccess"
+            }} else {{
+                Write-Output "UserNotFound"
+            }}
+            '''
+            run_powershell_command(change_password_command, expect_json=False)
+            # update result dictionary every reset password, it will be used to create csv
+            result.update({sam_account_name: password})
+        save_to_csv(result)
+        messagebox.showinfo(message='DONE!')
+        print(result)
+
+
+def save_to_csv(dictionary):
+    df = pandas.DataFrame(list(dictionary.items()), columns=['Username', 'Password'])
+    df.to_csv('emails_and_passwords.csv', index=False)
 
 
 # UI-----------------------------------------------------UI
@@ -186,7 +267,7 @@ search_section_frame = Frame(window, bg=DEEP_BLUE, bd=2, relief=GROOVE)
 search_section_frame.grid(row=0, column=0, columnspan=4, padx=10, pady=5, sticky="ew")
 
 username_id_entry = Entry(search_section_frame, width=72)
-username_id_entry.bind('<Return>', search)
+# username_id_entry.bind('<Return>', search)
 username_id_entry.focus()
 username_id_entry.config(highlightthickness=2, highlightcolor=STEEL_GREY, justify="left")
 username_id_entry.grid(row=0, column=0, columnspan=4, pady=5, padx=5)
@@ -196,7 +277,7 @@ search_btn.config(font=("Arial", 9, "bold"))
 search_btn.grid(row=1, column=0, columnspan=2, pady=5, padx=2)
 
 reset_and_print_btn = Button(search_section_frame, text="Reset Password And Print", width=30, bg=ACCENT_ORANGE,
-                             fg="black")
+                             fg="black", command=reset_password)
 reset_and_print_btn.config(font=("Arial", 9, "bold"), cursor="pirate")
 reset_and_print_btn.grid(row=1, column=2, columnspan=2, pady=5)
 
@@ -295,9 +376,9 @@ employee_id_value.config(bg=DEEP_BLUE, fg="white", font=("Arial", 12, "bold"))
 employee_id_value.grid(row=11, column=2, sticky="w", padx=15)
 
 # New generated Password
-new_password = Label(user_attr_frame, text="New generated password: ")
-new_password.config(bg=DEEP_BLUE, fg="white", font=("Arial", 12, "bold"))
-new_password.grid(row=12, column=0, sticky="w")
+new_password_label = Label(user_attr_frame, text="New generated password: ")
+new_password_label.config(bg=DEEP_BLUE, fg="white", font=("Arial", 12, "bold"))
+new_password_label.grid(row=12, column=0, sticky="w")
 
 new_password_entry = Entry(user_attr_frame, width=35)
 new_password_entry.config(highlightthickness=2, highlightcolor=STEEL_GREY, justify="left")
@@ -331,7 +412,7 @@ group_email_textbox.grid(row=0, column=0, padx=3, pady=5)
 
 # reset password and save to csv byn
 reset_and_savecsv_btn = Button(email_textbox_frame, text="Reset and save to CSV")
-reset_and_savecsv_btn.config(pady=5, width=62, bg=CHARCOAL, fg="white", cursor="pirate")
+reset_and_savecsv_btn.config(pady=5, width=62, bg=CHARCOAL, fg="white", cursor="pirate", command=group_reset_email)
 reset_and_savecsv_btn.grid(row=1, column=0, columnspan=4, pady=(0, 3))
 
 window.mainloop()
