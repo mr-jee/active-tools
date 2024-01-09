@@ -163,25 +163,27 @@ def reset_password():
             Write-Output "UserNotFound"
         }}
         '''
-        msg_box = messagebox.askyesno(title="Warning",
+        ask_reset_password_msg_box = messagebox.askyesno(title="Warning",
                                       message=f"Are you Sure You want to change\n{sam_account_name}'s password?",
                                       icon="warning")
-        if msg_box:
+        if ask_reset_password_msg_box:
             result_change_password_command = run_powershell_command(change_password_command, expect_json=False)
             # Check the result and return proper output to produce perfect message
             if "PasswordChangeSuccess" in result_change_password_command:
-                print("Password change successful.")
-                messagebox.showinfo(title="Success",
-                                    message=f"Password of user {sam_account_name} changed successfully")
                 username_id_entry.delete(0, END)
-                del search_result
+                ask_to_print_on_paper = messagebox.askyesno(title="Success",
+                                      message=f"Password of user {sam_account_name} changed successfully\nDo you want to print it on paper?",
+                                      icon="question")
+                if ask_to_print_on_paper:
+                    send_to_printer(search_result)
+                    del search_result
+                    del ask_to_print_on_paper
                 return True
             elif "UserNotFound" in result_change_password_command:
                 messagebox.showerror(title="Error", message="User Not Found.")
-                print("User not found.")
                 return False
             else:
-                print("Password change failed.")
+                messagebox.showerror(title="Error", message="Password change failed.")
 
     else:
         messagebox.showerror(title="OOPS!", message=f"You should search the user first")
