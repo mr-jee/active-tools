@@ -4,8 +4,13 @@ import random
 import subprocess
 import json
 import pandas
+from reportlab.lib.pagesizes import A5
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Table, TableStyle
+import os
 
-# import pyperclip
+
 
 DEEP_BLUE = "#004080"
 ACCENT_ORANGE = "#ffa500"
@@ -175,7 +180,8 @@ def reset_password():
                                       message=f"Password of user {sam_account_name} changed successfully\nDo you want to print it on paper?",
                                       icon="question")
                 if ask_to_print_on_paper:
-                    send_to_printer(search_result)
+                    create_pdf(sam_account_name, password)
+                    send_to_printer()
                     del search_result
                     del ask_to_print_on_paper
                 return True
@@ -189,9 +195,44 @@ def reset_password():
         messagebox.showerror(title="OOPS!", message=f"You should search the user first")
 
 
-def send_to_printer(input):
-    pass
+def create_pdf(username, password):
+    file_name = "Email.pdf"
+    pdf = canvas.Canvas(file_name, pagesize=A5)
+    pdf.setFont("Helvetica", 10)
+    extra_text = "You can visit this website to change your password: https://dssp.digikala.com"
+    table_data = [['Username: ', 'Password'], [f'{username}', f'{password}']]
 
+    table = Table(table_data, colWidths=190, rowHeights=15)
+    style = TableStyle([
+        ('GRID', (0, 0), (-1, -1), 1, (0, 0, 0)),  # Grid style for the entire table(body)
+        ('BACKGROUND', (0, 0), (0, 0), (0.8, 0.8, 0.8)),  # Background color for Username cell(heading)
+        ('BACKGROUND', (1, 0), (1, 0), (0.8, 0.8, 0.8)),  # Background color for Password cell(heading)
+    ])
+    table.setStyle(style)
+
+    middle_x = A5[0]/2
+    top_y = A5[1] - 0.1 * A5[1]
+
+    # Draw the table with margin
+    table.wrapOn(pdf, A5[0] - 0.5 * cm, A5[1] - 0.5 * cm)
+    table.drawOn(pdf, 0.5 * cm, top_y)  # Adjusted space from the left
+
+    # Draw text below the table
+    text_y = top_y - 0.5 * cm
+    text_x = 0.5 * cm  # Adjusted starting point from the left
+    # pdf.drawCentredString(text_x, text_y, extra_text)
+    pdf.drawString(text_x, text_y, extra_text)
+    pdf.save()
+
+
+def send_to_printer():
+    pdf_exact_path = os.path.abspath("Email.pdf")
+    print(pdf_exact_path)
+    print_on_paper_command = f"""
+    $pdfFilePath = "{pdf_exact_path}"
+    start-Process -FilePath $pdfFilePath -Verb Print
+    """
+    run_powershell_command(print_on_paper_command, expect_json=False)
 
 def generate_password():
     # password_entry.delete(0, END)
