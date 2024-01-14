@@ -58,9 +58,11 @@ def calculate_expire_time(given_time):
 
 def search_by_employee_id(id):
     employee_id = id
+    # $PaddedEmployeeID fills remaining characters with 0 from left up to 8 characters
     fetch_user_by_employeeid = f'''
     $employee_id = "{employee_id}"
-    Get-ADUser -Filter "EmployeeID -eq $employee_id" -Properties sAMAccountName,EmployeeId,DisplayName,Mail,Manager,Title,physicalDeliveryOfficeName,Department,Enabled,"msDS-UserPasswordExpiryTimeComputed" |
+    $PaddedEmployeeID = $employee_id.PadLeft(8,'0')
+    Get-ADUser -Filter {{EmployeeID -eq $PaddedEmployeeID -or EmployeeID -eq $employee_id}} -Properties sAMAccountName,EmployeeId,DisplayName,Mail,Manager,Title,physicalDeliveryOfficeName,Department,Enabled,"msDS-UserPasswordExpiryTimeComputed" |
     Select-Object sAMAccountName, EmployeeId, DisplayName, Mail, Manager, Title,physicalDeliveryOfficeName,Department,Enabled,"msDS-UserPasswordExpiryTimeComputed" |
     ConvertTo-Json
     '''
@@ -157,10 +159,10 @@ def reset_password():
         messagebox.showerror(title="Caution", message="No empty entry accepted!")
     elif search_result:
         sam_account_name = search_result.get("sAMAccountName")
-        password = new_password
+        password = new_password_entry.get()
         change_password_command = f'''
         $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName
-        $new_pass = "{password}"
+        $new_pass = ConvertTo-SecureString "{password}" -AsPlainText -Force
         if ($user -ne $null) {{
             Set-ADAccountPassword -Identity $user -NewPassword $new_pass -Reset
             Write-Output "PasswordChangeSuccess"
@@ -227,7 +229,6 @@ def create_pdf(username, password):
 
 def send_to_printer():
     pdf_exact_path = os.path.abspath("Email.pdf")
-    print(pdf_exact_path)
     print_on_paper_command = f"""
     $pdfFilePath = "{pdf_exact_path}"
     start-Process -FilePath $pdfFilePath -Verb Print
@@ -256,6 +257,7 @@ def generate_password():
 
 
 def handle_textbox():
+    """ Takes emails of textbox and convert them to username"""
     username_list = []
     email_list = group_email_textbox.get(0.0, 'end').strip().splitlines()
     for email in email_list:
