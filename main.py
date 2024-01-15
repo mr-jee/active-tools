@@ -12,8 +12,6 @@ from reportlab.pdfgen import canvas
 from reportlab.platypus import Table, TableStyle
 import os
 
-
-
 DEEP_BLUE = "#004080"
 ACCENT_ORANGE = "#ffa500"
 STEEL_GREY = "#9a9a9a"
@@ -29,7 +27,8 @@ def run_powershell_command(powershell_script, expect_json=True):
     equals True, if no json needed, set it to False"""
     # "-ExecutionPolicy", "Bypass" cause that script can run throght python and expire time will update
     try:
-        result = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_script], capture_output=True, text=True,
+        result = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_script],
+                                capture_output=True, text=True,
                                 check=True)
 
         if expect_json:
@@ -174,8 +173,8 @@ def reset_password():
         }}
         '''
         ask_reset_password_msg_box = messagebox.askyesno(title="Warning",
-                                      message=f"Are you Sure You want to change\n{sam_account_name}'s password?",
-                                      icon="warning")
+                                                         message=f"Are you Sure You want to change\n{sam_account_name}'s password?",
+                                                         icon="warning")
         if ask_reset_password_msg_box:
             result_change_password_command = run_powershell_command(change_password_command, expect_json=False)
             # Check the result and return proper output to produce perfect message
@@ -183,8 +182,8 @@ def reset_password():
                 username_id_entry.delete(0, END)
                 send_email(sam_account_name)
                 ask_to_print_on_paper = messagebox.askyesno(title="Success",
-                                      message=f"Password of user {sam_account_name} changed successfully\nDo you want to print it on paper?",
-                                      icon="question")
+                                                            message=f"Password of user {sam_account_name} changed successfully\nDo you want to print it on paper?",
+                                                            icon="question")
                 if ask_to_print_on_paper:
                     create_pdf(sam_account_name, password)
                     send_to_printer()
@@ -216,7 +215,7 @@ def create_pdf(username, password):
     ])
     table.setStyle(style)
 
-    middle_x = A5[0]/2
+    middle_x = A5[0] / 2
     top_y = A5[1] - 0.1 * A5[1]
 
     # Draw the table with margin
@@ -238,6 +237,7 @@ def send_to_printer():
     start-Process -FilePath $pdfFilePath -Verb Print
     """
     run_powershell_command(print_on_paper_command, expect_json=False)
+
 
 def generate_password():
     # password_entry.delete(0, END)
@@ -270,7 +270,35 @@ def handle_textbox():
 
     return username_list
 
+def run_ps(powershell_script, expect_json=True):
+    # This is the corrected and better version of run_powershell_command which i preferred  to have both of them in my code
+    # you can use one of them but the old one doesn't work for group_reset_email
+    try:
+        process = subprocess.Popen(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate()
 
+        if process.returncode != 0:
+            messagebox.showerror(title="PowerShell Error",
+                                 message=f"PowerShell command failed with return code {process.returncode}")
+            return None
+
+        if expect_json:
+            try:
+                return json.loads(stdout)
+            except json.JSONDecodeError as json_error:
+                messagebox.showinfo(title="JSONDecode ERROR", message=str(json_error))
+                return None
+        else:
+            return stdout
+
+    except Exception as ex:
+        messagebox.showerror(title="Error:", message=str(ex))
+        return None
 def group_reset_email():
     # end-1c: tkinter add a \n in the textbox by default and should be removed from the "end"
     if len(group_email_textbox.get(0.0, 'end-1c')) == 0:
@@ -283,7 +311,7 @@ def group_reset_email():
             password = generate_password()
             change_password_command = f'''
             $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName
-            $new_pass = "{password}"
+            $new_pass = ConvertTo-SecureString "{password}" -AsPlainText -Force
             if ($user -ne $null) {{
                 Set-ADAccountPassword -Identity $user -NewPassword $new_pass -Reset
                 Write-Output "PasswordChangeSuccess"
@@ -291,7 +319,8 @@ def group_reset_email():
                 Write-Output "UserNotFound"
             }}
             '''
-            run_powershell_command(change_password_command, expect_json=False)
+            run_ps(change_password_command, expect_json=False)
+            # print(result_change_password_command)
             # update result dictionary every reset password, it will be used to create csv
             result.update({sam_account_name: password})
         save_to_csv(result)
@@ -302,7 +331,6 @@ def group_reset_email():
 def save_to_csv(dictionary):
     df = pandas.DataFrame(list(dictionary.items()), columns=['Username', 'Password'])
     df.to_csv('emails_and_passwords.csv', index=False)
-
 
 
 def send_email(username):
