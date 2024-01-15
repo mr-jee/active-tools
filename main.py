@@ -1,9 +1,11 @@
-from tkinter import *
-from tkinter import messagebox
 import random
+import smtplib
 import subprocess
 import json
 import pandas
+from tkinter import *
+from tkinter import messagebox
+from tkinter import simpledialog
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
@@ -25,8 +27,9 @@ new_password = ""
 def run_powershell_command(powershell_script, expect_json=True):
     """ This method meant to run powershell commands, it takes powershell command as a variable, if JSON output is needed(like data of a user) expect_json
     equals True, if no json needed, set it to False"""
+    # "-ExecutionPolicy", "Bypass" cause that script can run throght python and expire time will update
     try:
-        result = subprocess.run(["powershell", "-Command", powershell_script], capture_output=True, text=True,
+        result = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_script], capture_output=True, text=True,
                                 check=True)
 
         if expect_json:
@@ -129,7 +132,7 @@ def search():
     global search_result
     global new_password
     # event listens when hit Enter on keyboard to run search
-    user_input = username_id_entry.get()
+    user_input = username_id_entry.get().strip()
     clear_table()
     if len(user_input) != 0:
         if user_input.isnumeric():
@@ -161,7 +164,7 @@ def reset_password():
         sam_account_name = search_result.get("sAMAccountName")
         password = new_password_entry.get()
         change_password_command = f'''
-        $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName
+        $user = Get-ADUser -Filter {{sAMAccountName -eq "{sam_account_name}"}} -Properties SamAccountName,"msDS-UserPasswordExpiryTimeComputed"
         $new_pass = ConvertTo-SecureString "{password}" -AsPlainText -Force
         if ($user -ne $null) {{
             Set-ADAccountPassword -Identity $user -NewPassword $new_pass -Reset
@@ -178,6 +181,7 @@ def reset_password():
             # Check the result and return proper output to produce perfect message
             if "PasswordChangeSuccess" in result_change_password_command:
                 username_id_entry.delete(0, END)
+                send_email(sam_account_name)
                 ask_to_print_on_paper = messagebox.askyesno(title="Success",
                                       message=f"Password of user {sam_account_name} changed successfully\nDo you want to print it on paper?",
                                       icon="question")
@@ -201,7 +205,7 @@ def create_pdf(username, password):
     file_name = "Email.pdf"
     pdf = canvas.Canvas(file_name, pagesize=A5)
     pdf.setFont("Helvetica", 10)
-    extra_text = "You can visit this website to change your password: https://dssp.digikala.com"
+    extra_text = "You can visit this website to change your password: https://someplacetochangepassword.com"
     table_data = [['Username: ', 'Password'], [f'{username}', f'{password}']]
 
     table = Table(table_data, colWidths=190, rowHeights=15)
@@ -249,7 +253,7 @@ def generate_password():
     password_lowercase_letters = [random.choice(lowercase_letters) for _ in range(3)]
 
     password_list = password_capital_letters + password_numbers + password_symbols + password_lowercase_letters
-    random.shuffle(password_list)
+    # random.shuffle(password_list)
     password = ''.join(password_list)
     return password
     # password_entry.insert(0, password)
@@ -298,6 +302,24 @@ def group_reset_email():
 def save_to_csv(dictionary):
     df = pandas.DataFrame(list(dictionary.items()), columns=['Username', 'Password'])
     df.to_csv('emails_and_passwords.csv', index=False)
+
+
+
+def send_email(username):
+    smtp_server = "smtp.mailserver.com"
+    port = 587
+    sender_email = "sender@mailserver.com"
+    receiver_email = "receiver@mailserver.com"
+    message = f"Subject:Password reset done - by Technician\n\nThe password of user {username}  was successfully changed by Technician."
+    password = simpledialog.askstring(title="Password",
+                                      prompt="Enter your email password.", show='*')
+    if password:
+        with smtplib.SMTP(smtp_server, port) as server:
+            server.starttls()
+            server.login(sender_email, password)
+            server.sendmail(sender_email, receiver_email, message)
+    else:
+        pass
 
 
 # UI-----------------------------------------------------UI
