@@ -270,9 +270,10 @@ def handle_textbox():
 
     return username_list
 
+
 def run_ps(powershell_script, expect_json=True):
-    # This is the corrected and better version of run_powershell_command which i preferred  to have both of them in my code
-    # you can use one of them but the old one doesn't work for group_reset_email
+    # This is the corrected and better version of run_powershell_command which i preferred  to have both of them in
+    # my code you can use one of them but the old one doesn't work for group_reset_email
     try:
         process = subprocess.Popen(
             ["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_script],
@@ -299,6 +300,8 @@ def run_ps(powershell_script, expect_json=True):
     except Exception as ex:
         messagebox.showerror(title="Error:", message=str(ex))
         return None
+
+
 def group_reset_email():
     # end-1c: tkinter add a \n in the textbox by default and should be removed from the "end"
     if len(group_email_textbox.get(0.0, 'end-1c')) == 0:
@@ -338,7 +341,8 @@ def send_email(username):
     port = 587
     sender_email = "sender@mailserver.com"
     receiver_email = "receiver@mailserver.com"
-    message = f"Subject:Password reset done - by Technician\n\nThe password of user {username}  was successfully changed by Technician."
+    message = (f"Subject:Password reset done - by Technician\n\nThe password of user {username}  was successfully "
+               f"changed by Technician.")
     password = simpledialog.askstring(title="Password",
                                       prompt="Enter your email password.", show='*')
     if password:
